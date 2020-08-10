@@ -89,7 +89,7 @@ void IndexParams::setAlgorithm(int value)
 }
 
 void IndexParams::getAll(std::vector<String>& names,
-            std::vector<int>& types,
+            std::vector<FlannIndexType>& types,
             std::vector<String>& strValues,
             std::vector<double>& numValues) const
 {
@@ -107,7 +107,7 @@ void IndexParams::getAll(std::vector<String>& names,
         try
         {
             String val = it->second.cast<String>();
-            types.push_back(CV_USRTYPE1);
+            types.push_back(FLANN_INDEX_TYPE_STRING);
             strValues.push_back(val);
             numValues.push_back(-1);
         continue;
@@ -119,7 +119,7 @@ void IndexParams::getAll(std::vector<String>& names,
         try
         {
             double val = it->second.cast<double>();
-            types.push_back( CV_64F );
+            types.push_back(FLANN_INDEX_TYPE_64F);
             numValues.push_back(val);
         continue;
         }
@@ -127,7 +127,7 @@ void IndexParams::getAll(std::vector<String>& names,
         try
         {
             float val = it->second.cast<float>();
-            types.push_back( CV_32F );
+            types.push_back(FLANN_INDEX_TYPE_32F);
             numValues.push_back(val);
         continue;
         }
@@ -135,7 +135,7 @@ void IndexParams::getAll(std::vector<String>& names,
         try
         {
             int val = it->second.cast<int>();
-            types.push_back( CV_32S );
+            types.push_back(FLANN_INDEX_TYPE_32S);
             numValues.push_back(val);
         continue;
         }
@@ -143,7 +143,7 @@ void IndexParams::getAll(std::vector<String>& names,
         try
         {
             short val = it->second.cast<short>();
-            types.push_back( CV_16S );
+            types.push_back(FLANN_INDEX_TYPE_16S);
             numValues.push_back(val);
         continue;
         }
@@ -151,7 +151,7 @@ void IndexParams::getAll(std::vector<String>& names,
         try
         {
             ushort val = it->second.cast<ushort>();
-            types.push_back( CV_16U );
+            types.push_back(FLANN_INDEX_TYPE_16U);
             numValues.push_back(val);
         continue;
         }
@@ -159,7 +159,7 @@ void IndexParams::getAll(std::vector<String>& names,
         try
         {
             char val = it->second.cast<char>();
-            types.push_back( CV_8S );
+            types.push_back(FLANN_INDEX_TYPE_8S);
             numValues.push_back(val);
         continue;
         }
@@ -167,7 +167,7 @@ void IndexParams::getAll(std::vector<String>& names,
         try
         {
             uchar val = it->second.cast<uchar>();
-            types.push_back( CV_8U );
+            types.push_back(FLANN_INDEX_TYPE_8U);
             numValues.push_back(val);
         continue;
         }
@@ -175,7 +175,7 @@ void IndexParams::getAll(std::vector<String>& names,
         try
         {
             bool val = it->second.cast<bool>();
-            types.push_back( CV_MAKETYPE(CV_USRTYPE1,2) );
+            types.push_back(FLANN_INDEX_TYPE_BOOL);
             numValues.push_back(val);
         continue;
         }
@@ -183,14 +183,14 @@ void IndexParams::getAll(std::vector<String>& names,
         try
         {
             cvflann::flann_algorithm_t val = it->second.cast<cvflann::flann_algorithm_t>();
-            types.push_back( CV_MAKETYPE(CV_USRTYPE1,3) );
+            types.push_back(FLANN_INDEX_TYPE_ALGORITHM);
             numValues.push_back(val);
         continue;
         }
         catch (...) {}
 
 
-        types.push_back(-1); // unknown type
+        types.push_back((FlannIndexType)-1); // unknown type
         numValues.push_back(-1);
     }
 }
@@ -294,6 +294,23 @@ SavedIndexParams::SavedIndexParams(const String& _filename)
     p["filename"] = filename;
 }
 
+SearchParams::SearchParams( int checks, float eps, bool sorted, bool explore_all_trees )
+{
+    ::cvflann::IndexParams& p = get_params(*this);
+
+    // how many leafs to visit when searching for neighbours (-1 for unlimited)
+    p["checks"] = checks;
+    // search for eps-approximate neighbours (default: 0)
+    p["eps"] = eps;
+    // only for radius search, require neighbours sorted by distance (default: true)
+    p["sorted"] = sorted;
+    // if false, search stops at the tree reaching the number of  max checks (original behavior).
+    // When true, we do a descent in each tree and. Like before the alternative paths
+    // stored in the heap are not be processed further when max checks is reached.
+    p["explore_all_trees"] = explore_all_trees;
+}
+
+
 SearchParams::SearchParams( int checks, float eps, bool sorted )
 {
     ::cvflann::IndexParams& p = get_params(*this);
@@ -304,6 +321,10 @@ SearchParams::SearchParams( int checks, float eps, bool sorted )
     p["eps"] = eps;
     // only for radius search, require neighbours sorted by distance (default: true)
     p["sorted"] = sorted;
+    // if false, search stops at the tree reaching the number of  max checks (original behavior).
+    // When true, we do a descent in each tree and. Like before the alternative paths
+    // stored in the heap are not be processed further when max checks is reached.
+    p["explore_all_trees"] = false;
 }
 
 
@@ -365,7 +386,7 @@ Index::Index(InputArray _data, const IndexParams& params, flann_distance_t _dist
 
 void Index::build(InputArray _data, const IndexParams& params, flann_distance_t _distType)
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     release();
     algo = getParam<flann_algorithm_t>(params, "algorithm", FLANN_INDEX_LINEAR);
@@ -435,7 +456,7 @@ Index::~Index()
 
 void Index::release()
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     if( !index )
         return;
@@ -482,6 +503,9 @@ void runKnnSearch_(void* index, const Mat& query, Mat& indices, Mat& dists,
     typedef typename Distance::ResultType DistanceType;
     int type = DataType<ElementType>::type;
     int dtype = DataType<DistanceType>::type;
+    IndexType* index_ = (IndexType*)index;
+
+    CV_Assert((size_t)knn <= index_->size());
     CV_Assert(query.type() == type && indices.type() == CV_32S && dists.type() == dtype);
     CV_Assert(query.isContinuous() && indices.isContinuous() && dists.isContinuous());
 
@@ -489,8 +513,8 @@ void runKnnSearch_(void* index, const Mat& query, Mat& indices, Mat& dists,
     ::cvflann::Matrix<int> _indices(indices.ptr<int>(), indices.rows, indices.cols);
     ::cvflann::Matrix<DistanceType> _dists(dists.ptr<DistanceType>(), dists.rows, dists.cols);
 
-    ((IndexType*)index)->knnSearch(_query, _indices, _dists, knn,
-                                   (const ::cvflann::SearchParams&)get_params(params));
+    index_->knnSearch(_query, _indices, _dists, knn,
+                      (const ::cvflann::SearchParams&)get_params(params));
 }
 
 template<typename Distance>
@@ -567,7 +591,7 @@ static void createIndicesDists(OutputArray _indices, OutputArray _dists,
 void Index::knnSearch(InputArray _query, OutputArray _indices,
                OutputArray _dists, int knn, const SearchParams& params)
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     Mat query = _query.getMat(), indices, dists;
     int dtype = distType == FLANN_DIST_HAMMING ? CV_32S : CV_32F;
@@ -611,7 +635,7 @@ int Index::radiusSearch(InputArray _query, OutputArray _indices,
                         OutputArray _dists, double radius, int maxResults,
                         const SearchParams& params)
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     Mat query = _query.getMat(), indices, dists;
     int dtype = distType == FLANN_DIST_HAMMING ? CV_32S : CV_32F;
@@ -676,7 +700,7 @@ template<typename Distance> void saveIndex(const Index* index0, const void* inde
 
 void Index::save(const String& filename) const
 {
-    CV_INSTRUMENT_REGION()
+    CV_INSTRUMENT_REGION();
 
     FILE* fout = fopen(filename.c_str(), "wb");
     if (fout == NULL)
@@ -798,7 +822,7 @@ bool Index::load(InputArray _data, const String& filename)
         loadIndex< ::cvflann::MaxDistance<float> >(this, index, data, fin);
         break;
     case FLANN_DIST_HIST_INTERSECT:
-        loadIndex< ::cvflann::HistIntersectionDistance<float> >(index, data, fin);
+        loadIndex< ::cvflann::HistIntersectionDistance<float> >(this, index, data, fin);
         break;
     case FLANN_DIST_HELLINGER:
         loadIndex< ::cvflann::HellingerDistance<float> >(this, index, data, fin);

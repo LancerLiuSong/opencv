@@ -41,17 +41,13 @@
 
 /*
   This is a regression test for stereo matching algorithms. This test gets some quality metrics
-  discribed in "A Taxonomy and Evaluation of Dense Two-Frame Stereo Correspondence Algorithms".
+  described in "A Taxonomy and Evaluation of Dense Two-Frame Stereo Correspondence Algorithms".
   Daniel Scharstein, Richard Szeliski
 */
 
 #include "test_precomp.hpp"
-#include <limits>
-#include <cstdio>
-#include <map>
 
-using namespace std;
-using namespace cv;
+namespace opencv_test { namespace {
 
 const float EVAL_BAD_THRESH = 1.f;
 const int EVAL_TEXTURELESS_WIDTH = 3;
@@ -238,10 +234,10 @@ void computeDepthDiscontMask( const Mat& disp, Mat& depthDiscontMask, const Mat&
 
     Mat curDisp; disp.copyTo( curDisp );
     if( !unknDispMask.empty() )
-        curDisp.setTo( Scalar(numeric_limits<float>::min()), unknDispMask );
+        curDisp.setTo( Scalar(std::numeric_limits<float>::min()), unknDispMask );
     Mat maxNeighbDisp; dilate( curDisp, maxNeighbDisp, Mat(3, 3, CV_8UC1, Scalar(1)) );
     if( !unknDispMask.empty() )
-        curDisp.setTo( Scalar(numeric_limits<float>::max()), unknDispMask );
+        curDisp.setTo( Scalar(std::numeric_limits<float>::max()), unknDispMask );
     Mat minNeighbDisp; erode( curDisp, minNeighbDisp, Mat(3, 3, CV_8UC1, Scalar(1)) );
     depthDiscontMask = max( (Mat)(maxNeighbDisp-disp), (Mat)(disp-minNeighbDisp) ) > dispGap;
     if( !unknDispMask.empty() )
@@ -560,18 +556,18 @@ int CV_StereoMatchingTest::processStereoMatchingResults( FileStorage& fs, int ca
     assert( fs.isOpened() );
     assert( trueLeftDisp.type() == CV_32FC1 );
     assert( trueRightDisp.empty() || trueRightDisp.type() == CV_32FC1 );
-    assert( leftDisp.type() == CV_32FC1 && rightDisp.type() == CV_32FC1 );
+    assert( leftDisp.type() == CV_32FC1 && (rightDisp.empty() || rightDisp.type() == CV_32FC1) );
 
     // get masks for unknown ground truth disparity values
     Mat leftUnknMask, rightUnknMask;
     DatasetParams params = datasetsParams[caseDatasets[caseIdx]];
     absdiff( trueLeftDisp, Scalar(params.dispUnknVal), leftUnknMask );
-    leftUnknMask = leftUnknMask < numeric_limits<float>::epsilon();
+    leftUnknMask = leftUnknMask < std::numeric_limits<float>::epsilon();
     assert(leftUnknMask.type() == CV_8UC1);
     if( !trueRightDisp.empty() )
     {
         absdiff( trueRightDisp, Scalar(params.dispUnknVal), rightUnknMask );
-        rightUnknMask = rightUnknMask < numeric_limits<float>::epsilon();
+        rightUnknMask = rightUnknMask < std::numeric_limits<float>::epsilon();
         assert(rightUnknMask.type() == CV_8UC1);
     }
 
@@ -795,6 +791,12 @@ protected:
         bm->compute( leftImg, rightImg, tempDisp );
         tempDisp.convertTo(leftDisp, CV_32F, 1./StereoMatcher::DISP_SCALE);
 
+        //check for fixed-type disparity data type
+        Mat_<float> fixedFloatDisp;
+        bm->compute( leftImg, rightImg, fixedFloatDisp );
+        EXPECT_LT(cvtest::norm(fixedFloatDisp, leftDisp, cv::NORM_L2 | cv::NORM_RELATIVE),
+                  0.005 + DBL_EPSILON);
+
         if (params.mindisp != 0)
             for (int y = 0; y < leftDisp.rows; y++)
                 for (int x = 0; x < leftDisp.cols; x++)
@@ -806,6 +808,55 @@ protected:
         return params.winSize/2;
     }
 };
+
+TEST(Calib3d_StereoBM, regression) { CV_StereoBMTest test; test.safe_run(); }
+
+/* < preFilter, < preFilterCap, SADWindowSize > >*/
+typedef tuple < int, tuple < int, int > > BufferBM_Params_t;
+
+typedef testing::TestWithParam< BufferBM_Params_t > Calib3d_StereoBM_BufferBM;
+
+const int preFilters[] =
+{
+    StereoBM::PREFILTER_NORMALIZED_RESPONSE,
+    StereoBM::PREFILTER_XSOBEL
+};
+
+const tuple < int, int > useShortsConditions[] =
+{
+    make_tuple(30, 19),
+    make_tuple(32, 23)
+};
+
+TEST_P(Calib3d_StereoBM_BufferBM, memAllocsTest)
+{
+    const int preFilter     = get<0>(GetParam());
+    const int preFilterCap  = get<0>(get<1>(GetParam()));
+    const int SADWindowSize = get<1>(get<1>(GetParam()));
+
+    String path = cvtest::TS::ptr()->get_data_path() + "cv/stereomatching/datasets/teddy/";
+    Mat leftImg = imread(path + "im2.png", 0);
+    ASSERT_FALSE(leftImg.empty());
+    Mat rightImg = imread(path + "im6.png", 0);
+    ASSERT_FALSE(rightImg.empty());
+    Mat leftDisp;
+    {
+        Ptr<StereoBM> bm = StereoBM::create(16,9);
+        bm->setPreFilterType(preFilter);
+        bm->setPreFilterCap(preFilterCap);
+        bm->setBlockSize(SADWindowSize);
+        bm->compute( leftImg, rightImg, leftDisp);
+
+        ASSERT_FALSE(leftDisp.empty());
+    }
+}
+
+INSTANTIATE_TEST_CASE_P(/*nothing*/, Calib3d_StereoBM_BufferBM,
+        testing::Combine(
+            testing::ValuesIn(preFilters),
+            testing::ValuesIn(useShortsConditions)
+            )
+        );
 
 //----------------------------------- StereoSGBM test -----------------------------------------------------
 
@@ -867,8 +918,6 @@ protected:
     }
 };
 
-
-TEST(Calib3d_StereoBM, regression) { CV_StereoBMTest test; test.safe_run(); }
 TEST(Calib3d_StereoSGBM, regression) { CV_StereoSGBMTest test; test.safe_run(); }
 
 TEST(Calib3d_StereoSGBM_HH4, regression)
@@ -892,3 +941,5 @@ TEST(Calib3d_StereoSGBM_HH4, regression)
     absdiff(toCheck, testData,diff);
     CV_Assert( countNonZero(diff)==0);
 }
+
+}} // namespace
