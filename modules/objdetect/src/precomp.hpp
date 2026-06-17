@@ -43,15 +43,17 @@
 #ifndef __OPENCV_PRECOMP_H__
 #define __OPENCV_PRECOMP_H__
 
+#include "opencv2/core.hpp"
 #include "opencv2/objdetect.hpp"
+#include "opencv2/objdetect/barcode.hpp"
 #include "opencv2/imgproc.hpp"
 
 #include "opencv2/core/utility.hpp"
 #include "opencv2/core/ocl.hpp"
 #include "opencv2/core/private.hpp"
 
-#ifdef HAVE_TEGRA_OPTIMIZATION
-#include "opencv2/objdetect/objdetect_tegra.hpp"
-#endif
+#include <numeric>
+#include <array>
+#include <vector>
 
 #endif

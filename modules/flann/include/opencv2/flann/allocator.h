@@ -1,4 +1,4 @@
-/***********************************************************************
+/*M*********************************************************************
  * Software License Agreement (BSD License)
  *
  * Copyright 2008-2009  Marius Muja (mariusm@cs.ubc.ca). All rights reserved.
@@ -30,6 +30,8 @@
 
 #ifndef OPENCV_FLANN_ALLOCATOR_H_
 #define OPENCV_FLANN_ALLOCATOR_H_
+
+//! @cond IGNORED
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -188,5 +190,7 @@ private:
 };
 
 }
+
+//! @endcond
 
 #endif //OPENCV_FLANN_ALLOCATOR_H_

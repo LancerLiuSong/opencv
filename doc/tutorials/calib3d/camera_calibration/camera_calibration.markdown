@@ -1,9 +1,20 @@
 Camera calibration With OpenCV {#tutorial_camera_calibration}
 ==============================
 
-Cameras have been around for a long-long time. However, with the introduction of the cheap *pinhole*
+@tableofcontents
+
+@prev_tutorial{tutorial_camera_calibration_square_chess}
+@next_tutorial{tutorial_real_time_pose}
+
+|    |    |
+| -: | :- |
+| Original author | Bernát Gábor |
+| Compatibility | OpenCV >= 4.0 |
+
+
+Cameras have been around for a very long time. However, with the introduction of the cheap *pinhole*
 cameras in the late 20th century, they became a common occurrence in our everyday life.
-Unfortunately, this cheapness comes with its price: significant distortion. Luckily, these are
+Unfortunately, this low cost comes with a trade-off: significant distortion. Luckily, these are
 constants and with a calibration and some remapping we can correct this. Furthermore, with
 calibration you may also determine the relation between the camera's natural units (pixels) and the
 real world units (for example millimeters).
@@ -11,8 +22,10 @@ real world units (for example millimeters).
 Theory
 ------
 
-For the distortion OpenCV takes into account the radial and tangential factors. For the radial
-factor one uses the following formula:
+For distortion, OpenCV takes into account both radial and tangential factors. For the radial
+factor one uses the following formulas:
+
+\f[r^2 = x^2 + y^2\f]
 
 \f[x_{distorted} = x( 1 + k_1 r^2 + k_2 r^4 + k_3 r^6) \\
 y_{distorted} = y( 1 + k_1 r^2 + k_2 r^4 + k_3 r^6)\f]
@@ -49,13 +62,14 @@ done through basic geometrical equations. The equations used depend on the chose
 objects. Currently OpenCV supports three types of objects for calibration:
 
 -   Classical black-white chessboard
+-   ChArUco board pattern
 -   Symmetrical circle pattern
 -   Asymmetrical circle pattern
 
-Basically, you need to take snapshots of these patterns with your camera and let OpenCV find them.
+In practice, you need to capture multiple images of these patterns using your camera and let OpenCV find them.
 Each found pattern results in a new equation. To solve the equation you need at least a
 predetermined number of pattern snapshots to form a well-posed equation system. This number is
-higher for the chessboard pattern and less for the circle ones. For example, in theory the
+higher for the chessboard pattern and lower for circle-based patterns.For example, in theory the
 chessboard pattern requires at least two snapshots. However, in practice we have a good amount of
 noise present in our input images, so for good results you will probably need at least 10 good
 snapshots of the input pattern in different positions.
@@ -77,13 +91,14 @@ Source code
 
 You may also find the source code in the `samples/cpp/tutorial_code/calib3d/camera_calibration/`
 folder of the OpenCV source library or [download it from here
-](https://github.com/opencv/opencv/tree/master/samples/cpp/tutorial_code/calib3d/camera_calibration/camera_calibration.cpp). The program has a
-single argument: the name of its configuration file. If none is given then it will try to open the
+](https://github.com/opencv/opencv/tree/4.x/samples/cpp/tutorial_code/calib3d/camera_calibration/camera_calibration.cpp).
+For the usage of the program, run it with `-h` argument. The program has an
+essential argument: the name of its configuration file. If none is given then it will try to open the
 one named "default.xml". [Here's a sample configuration file
-](https://github.com/opencv/opencv/tree/master/samples/cpp/tutorial_code/calib3d/camera_calibration/in_VID5.xml) in XML format. In the
+](https://github.com/opencv/opencv/tree/4.x/samples/cpp/tutorial_code/calib3d/camera_calibration/in_VID5.xml) in XML format. In the
 configuration file you may choose to use camera as an input, a video file or an image list. If you
 opt for the last one, you will need to create a configuration file where you enumerate the images to
-use. Here's [an example of this ](https://github.com/opencv/opencv/tree/master/samples/cpp/tutorial_code/calib3d/camera_calibration/VID5.xml).
+use. Here's [an example of this ](https://github.com/opencv/opencv/tree/4.x/samples/cpp/tutorial_code/calib3d/camera_calibration/VID5.xml).
 The important part to remember is that the images need to be specified using the absolute path or
 the relative one from your application's working directory. You may find all this in the samples
 directory mentioned above.
@@ -116,26 +131,38 @@ Explanation
 -#  **Find the pattern in the current input**
 
     The formation of the equations I mentioned above aims
-    to finding major patterns in the input: in case of the chessboard this are corners of the
-    squares and for the circles, well, the circles themselves. The position of these will form the
+    to finding major patterns in the input: in case of the chessboard these are corners of the
+    squares and for the circles, well, the circles themselves. ChArUco board is equivalent to
+    chessboard, but corners are matched by ArUco markers. The position of these will form the
     result which will be written into the *pointBuf* vector.
     @snippet samples/cpp/tutorial_code/calib3d/camera_calibration/camera_calibration.cpp find_pattern
     Depending on the type of the input pattern you use either the @ref cv::findChessboardCorners or
-    the @ref cv::findCirclesGrid function. For both of them you pass the current image and the size
-    of the board and you'll get the positions of the patterns. Furthermore, they return a boolean
-    variable which states if the pattern was found in the input (we only need to take into account
-    those images where this is true!).
+    the @ref cv::findCirclesGrid function or @ref cv::aruco::CharucoDetector::detectBoard method.
+    For all of them you pass the current image and the size of the board and you'll get the positions
+    of the patterns. cv::findChessboardCorners and cv::findCirclesGrid return a boolean variable
+    which states if the pattern was found in the input (we only need to take into account
+    those images where this is true!). `CharucoDetector::detectBoard` may detect partially visible
+    pattern and returns coordinates and ids of visible inner corners.
 
-    Then again in case of cameras we only take camera images when an input delay time is passed.
-    This is done in order to allow user moving the chessboard around and getting different images.
+    @note Board size and amount of matched points is different for chessboard, circles grid and ChArUco.
+    All chessboard related algorithm expects amount of inner corners as board width and height.
+    Board size of circles grid is just amount of circles by both grid dimensions. ChArUco board size
+    is defined in squares, but detection result is list of inner corners and that's why is smaller
+    by 1 in both dimensions.
+
+    In the case of live cameras, we only capture images when an input delay time is passed.
+    This is done to allow the user to move the chessboard around and getting different images.
     Similar images result in similar equations, and similar equations at the calibration step will
     form an ill-posed problem, so the calibration will fail. For square images the positions of the
     corners are only approximate. We may improve this by calling the @ref cv::cornerSubPix function.
+    (`winSize` is used to control the side length of the search window. Its default value is 11.
+    `winSize` may be changed by command line parameter `--winSize=<number>`.)
     It will produce better calibration result. After this we add a valid inputs result to the
     *imagePoints* vector to collect all of the equations into a single container. Finally, for
     visualization feedback purposes we will draw the found points on the input image using @ref
     cv::findChessboardCorners function.
     @snippet samples/cpp/tutorial_code/calib3d/camera_calibration/camera_calibration.cpp pattern_found
+
 -#  **Show state and result to the user, plus command line control of the application**
 
     This part shows text output on the image.
@@ -146,6 +173,7 @@ Explanation
     Then we show the image and wait for an input key and if this is *u* we toggle the distortion removal,
     if it is *g* we start again the detection process, and finally for the *ESC* key we quit the application:
     @snippet samples/cpp/tutorial_code/calib3d/camera_calibration/camera_calibration.cpp await_input
+
 -#  **Show the distortion removal for the images too**
 
     When you work with an image list it is not
@@ -170,7 +198,7 @@ of the calibration variables we'll create these variables here and pass on both 
 calibration and saving function. Again, I'll not show the saving part as that has little in common
 with the calibration. Explore the source file in order to find out how and what:
 @snippet samples/cpp/tutorial_code/calib3d/camera_calibration/camera_calibration.cpp run_and_save
-We do the calibration with the help of the @ref cv::calibrateCamera function. It has the following
+We do the calibration with the help of the @ref cv::calibrateCameraRO function. It has the following
 parameters:
 
 -   The object points. This is a vector of *Point3f* vector that for each input image describes how
@@ -184,13 +212,33 @@ parameters:
     @code{.cpp}
     vector<vector<Point3f> > objectPoints(1);
     calcBoardCornerPositions(s.boardSize, s.squareSize, objectPoints[0], s.calibrationPattern);
+    objectPoints[0][s.boardSize.width - 1].x = objectPoints[0][0].x + grid_width;
+    newObjPoints = objectPoints[0];
+
     objectPoints.resize(imagePoints.size(),objectPoints[0]);
     @endcode
+    @note If your calibration board is inaccurate, unmeasured, roughly planar targets (Checkerboard
+    patterns on paper using off-the-shelf printers are the most convenient calibration targets and
+    most of them are not accurate enough.), a method from @cite strobl2011iccv can be utilized to
+    dramatically improve the accuracies of the estimated camera intrinsic parameters. This new
+    calibration method will be called if command line parameter `-d=<number>` is provided. In the
+    above code snippet, `grid_width` is actually the value set by `-d=<number>`. It's the measured
+    distance between top-left (0, 0, 0) and top-right (s.squareSize*(s.boardSize.width-1), 0, 0)
+    corners of the pattern grid points. It should be measured precisely with rulers or vernier calipers.
+    After calibration, newObjPoints will be updated with refined 3D coordinates of object points.
 -   The image points. This is a vector of *Point2f* vector which for each input image contains
     coordinates of the important points (corners for chessboard and centers of the circles for the
     circle pattern). We have already collected this from @ref cv::findChessboardCorners or @ref
     cv::findCirclesGrid function. We just need to pass it on.
 -   The size of the image acquired from the camera, video file or the images.
+-   The index of the object point to be fixed. We set it to -1 to request standard calibration method.
+    If the new object-releasing method to be used, set it to the index of the top-right corner point
+    of the calibration board grid. See cv::calibrateCameraRO for detailed explanation.
+    @code{.cpp}
+    int iFixedPoint = -1;
+    if (release_object)
+        iFixedPoint = s.boardSize.width - 1;
+    @endcode
 -   The camera matrix. If we used the fixed aspect ratio option we need to set \f$f_x\f$:
     @snippet samples/cpp/tutorial_code/calib3d/camera_calibration/camera_calibration.cpp fixed_aspect
 -   The distortion coefficient matrix. Initialize with zero.
@@ -202,11 +250,15 @@ parameters:
     coordinate space). The 7-th and 8-th parameters are the output vector of matrices containing in
     the i-th position the rotation and translation vector for the i-th object point to the i-th
     image point.
+-   The updated output vector of calibration pattern points. This parameter is ignored with standard
+    calibration method.
 -   The final argument is the flag. You need to specify here options like fix the aspect ratio for
-    the focal length, assume zero tangential distortion or to fix the principal point.
+    the focal length, assume zero tangential distortion or to fix the principal point. Here we use
+    CALIB_USE_LU to get faster calibration speed.
 @code{.cpp}
-double rms = calibrateCamera(objectPoints, imagePoints, imageSize, cameraMatrix,
-                            distCoeffs, rvecs, tvecs, s.flag|CV_CALIB_FIX_K4|CV_CALIB_FIX_K5);
+rms = calibrateCameraRO(objectPoints, imagePoints, imageSize, iFixedPoint,
+                        cameraMatrix, distCoeffs, rvecs, tvecs, newObjPoints,
+                        s.flag | CALIB_USE_LU);
 @endcode
 -   The function returns the average re-projection error. This number gives a good estimation of
     precision of the found parameters. This should be as close to zero as possible. Given the

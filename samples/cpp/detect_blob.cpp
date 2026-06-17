@@ -1,4 +1,7 @@
-#include <opencv2/opencv.hpp>
+#include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/highgui.hpp>
+#include <opencv2/features2d.hpp>
 #include <vector>
 #include <map>
 #include <iostream>
@@ -7,12 +10,13 @@ using namespace std;
 using namespace cv;
 
 
-static void help()
+static void help(char** argv)
 {
     cout << "\n This program demonstrates how to use BLOB to detect and filter region \n"
-        "Usage: \n"
-        "  ./detect_blob <image1(../data/detect_blob.png as default)>\n"
-        "Press a key when image window is active to change descriptor";
+         << "Usage: \n"
+         << argv[0]
+         << " <image1(detect_blob.png as default)>\n"
+         << "Press a key when image window is active to change descriptor";
 }
 
 
@@ -67,20 +71,19 @@ static String Legende(SimpleBlobDetector::Params &pAct)
 
 int main(int argc, char *argv[])
 {
-    vector<String> fileName;
-    Mat img(600, 800, CV_8UC1);
-    cv::CommandLineParser parser(argc, argv, "{@input |../data/detect_blob.png| }{h help | | }");
+    String fileName;
+    cv::CommandLineParser parser(argc, argv, "{@input |detect_blob.png| }{h help | | }");
     if (parser.has("h"))
     {
-        help();
+        help(argv);
         return 0;
     }
-    fileName.push_back(parser.get<string>("@input"));
-    img = imread(fileName[0], IMREAD_COLOR);
-    if (img.rows*img.cols <= 0)
+    fileName = parser.get<string>("@input");
+    Mat img = imread(samples::findFile(fileName), IMREAD_COLOR);
+    if (img.empty())
     {
-        cout << "Image " << fileName[0] << " is empty or cannot be found\n";
-        return(0);
+        cout << "Image " << fileName << " is empty or cannot be found\n";
+        return 1;
     }
 
     SimpleBlobDetector::Params pDefaultBLOB;
@@ -104,6 +107,8 @@ int main(int argc, char *argv[])
     pDefaultBLOB.filterByConvexity = false;
     pDefaultBLOB.minConvexity = 0.95f;
     pDefaultBLOB.maxConvexity = (float)1e37;
+    // Enable contour collection so we can draw blob outlines (see getBlobContours() below).
+    pDefaultBLOB.collectContours = true;
     // Descriptor array for BLOB
     vector<String> typeDesc;
     // Param array for BLOB
@@ -113,14 +118,17 @@ int main(int argc, char *argv[])
     vector< Vec3b >  palette;
     for (int i = 0; i<65536; i++)
     {
-        palette.push_back(Vec3b((uchar)rand(), (uchar)rand(), (uchar)rand()));
+        uchar c1 = (uchar)rand();
+        uchar c2 = (uchar)rand();
+        uchar c3 = (uchar)rand();
+        palette.push_back(Vec3b(c1, c2, c3));
     }
-    help();
+    help(argv);
 
 
-    // This descriptor are going to be detect and compute BLOBS with 6 differents params
+    // These descriptors are going to be detecting and computing BLOBS with 6 different params
     // Param for first BLOB detector we want all
-    typeDesc.push_back("BLOB");    // see http://docs.opencv.org/trunk/d0/d7a/classcv_1_1SimpleBlobDetector.html
+    typeDesc.push_back("BLOB");    // see http://docs.opencv.org/4.x/d0/d7a/classcv_1_1SimpleBlobDetector.html
     pBLOB.push_back(pDefaultBLOB);
     pBLOB.back().filterByArea = true;
     pBLOB.back().minArea = 1;
@@ -147,7 +155,7 @@ int main(int argc, char *argv[])
     pBLOB.back().filterByConvexity = true;
     pBLOB.back().minConvexity = 0.;
     pBLOB.back().maxConvexity = (float)0.9;
-    // Param for six BLOB detector we want blob with gravity center color equal to 0 bug #4321 must be fixed
+    // Param for six BLOB detector we want blob with gravity center color equal to 0
     typeDesc.push_back("BLOB");
     pBLOB.push_back(pDefaultBLOB);
     pBLOB.back().filterByColor = true;
@@ -175,7 +183,7 @@ int main(int argc, char *argv[])
             vector<Rect>  zone;
             vector<vector <Point> >  region;
             Mat     desc, result(img.rows, img.cols, CV_8UC3);
-            if (b.dynamicCast<SimpleBlobDetector>() != NULL)
+            if (b.dynamicCast<SimpleBlobDetector>().get())
             {
                 Ptr<SimpleBlobDetector> sbd = b.dynamicCast<SimpleBlobDetector>();
                 sbd->detect(img, keyImg, Mat());
@@ -183,13 +191,18 @@ int main(int argc, char *argv[])
                 int i = 0;
                 for (vector<KeyPoint>::iterator k = keyImg.begin(); k != keyImg.end(); ++k, ++i)
                     circle(result, k->pt, (int)k->size, palette[i % 65536]);
+                // Retrieve the per-blob contours collected during detect() and outline each blob.
+                // Requires SimpleBlobDetector::Params::collectContours to be true.
+                const vector<vector<Point> >& blobContours = sbd->getBlobContours();
+                for (size_t c = 0; c < blobContours.size(); ++c)
+                    drawContours(result, blobContours, (int)c, Scalar(0, 255, 0), 1);
             }
             namedWindow(*itDesc + label, WINDOW_AUTOSIZE);
             imshow(*itDesc + label, result);
             imshow("Original", img);
             waitKey();
         }
-        catch (Exception& e)
+        catch (const Exception& e)
         {
             cout << "Feature : " << *itDesc << "\n";
             cout << e.msg << endl;

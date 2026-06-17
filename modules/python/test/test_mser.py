@@ -7,7 +7,8 @@ MSER detector test
 from __future__ import print_function
 
 import numpy as np
-import cv2
+import cv2 as cv
+import random
 
 from tests_common import NewOpenCVTests
 
@@ -31,19 +32,18 @@ class mser_test(NewOpenCVTests):
          [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255],
          [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]
         ]
-        thresharr = [ 0, 70, 120, 180, 255 ]
         kDelta = 5
-        mserExtractor = cv2.MSER_create()
+        mserExtractor = cv.MSER_create()
         mserExtractor.setDelta(kDelta)
-        np.random.seed(10)
+        random.seed(10)
 
         for _i in range(100):
 
-            use_big_image = int(np.random.rand(1,1)*7) != 0
-            invert = int(np.random.rand(1,1)*2) != 0
-            binarize = int(np.random.rand(1,1)*5) != 0 if use_big_image else False
-            blur = int(np.random.rand(1,1)*2) != 0
-            thresh = thresharr[int(np.random.rand(1,1)*5)]
+            use_big_image = random.choice([True, False])
+            invert = random.choice([True, False])
+            binarize = random.choice([True, False]) if use_big_image else False
+            blur = random.choice([True, False])
+            thresh = random.choice([0, 70, 120, 180, 255])
             src0 = img if use_big_image else np.array(smallImg).astype('uint8')
             src = src0.copy()
 
@@ -53,11 +53,11 @@ class mser_test(NewOpenCVTests):
             mserExtractor.setMinArea(kMinArea)
             mserExtractor.setMaxArea(kMaxArea)
             if invert:
-                cv2.bitwise_not(src, src)
+                cv.bitwise_not(src, src)
             if binarize:
-                _, src = cv2.threshold(src, thresh, 255, cv2.THRESH_BINARY)
+                _, src = cv.threshold(src, thresh, 255, cv.THRESH_BINARY)
             if blur:
-                src = cv2.GaussianBlur(src, (5, 5), 1.5, 1.5)
+                src = cv.GaussianBlur(src, (5, 5), 1.5, 1.5)
             minRegs = 7 if use_big_image else 2
             maxRegs = 1000 if use_big_image else 20
             if binarize and (thresh == 0 or thresh == 255):

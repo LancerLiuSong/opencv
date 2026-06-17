@@ -1,3 +1,7 @@
+// This file is a part of OpenCV project.
+// See opencv/LICENSE and http://opencv.org/license.html for the actual licensing terms.
+// See also opencv/doc/LICENSE_CHANGE_NOTICE.txt. Below is the original license:
+
 /*
 By downloading, copying, installing or using the software you agree to this license.
 If you do not agree to this license, do not download, install,
@@ -70,6 +74,8 @@ public:
     virtual ~BaseRowFilter();
     //! the filtering operator. Must be overridden in the derived classes. The horizontal border interpolation is done outside of the class.
     virtual void operator()(const uchar* src, uchar* dst, int width, int cn) = 0;
+    //! returns true if the filter holds no mutable state between calls (safe for concurrent tile-parallel invocation)
+    virtual bool isStateless() const { return false; }
 
     int ksize;
     int anchor;
@@ -100,6 +106,8 @@ public:
     virtual void operator()(const uchar** src, uchar* dst, int dststep, int dstcount, int width) = 0;
     //! resets the internal buffers, if any
     virtual void reset();
+    //! returns true if the filter holds no mutable state between calls (safe for concurrent tile-parallel invocation)
+    virtual bool isStateless() const { return false; }
 
     int ksize;
     int anchor;
@@ -128,6 +136,8 @@ public:
     virtual void operator()(const uchar** src, uchar* dst, int dststep, int dstcount, int width, int cn) = 0;
     //! resets the internal buffers, if any
     virtual void reset();
+    //! returns true if the filter holds no mutable state between calls (safe for concurrent tile-parallel invocation)
+    virtual bool isStateless() const { return false; }
 
     Size ksize;
     Point anchor;
@@ -184,7 +194,7 @@ public:
      Mat Iyy( DELTA + kd.rows - 1, src.cols, dst.type() );
 
      // inside the loop we always pass DELTA rows to the filter
-     // (note that the "proceed" method takes care of possibe overflow, since
+     // (note that the "proceed" method takes care of possible overflow, since
      // it was given the actual image height in the "start" method)
      // on output we can get:
      //  * < DELTA rows (the initial buffer accumulation stage)
@@ -246,6 +256,9 @@ public:
     //! returns the number
     int remainingInputRows() const;
     int remainingOutputRows() const;
+
+    //! returns true if the engine's filters are entirely stateless and thus safe for 2D parallel block chunking
+    bool isStateless() const;
 
     int srcType;
     int dstType;
@@ -366,10 +379,8 @@ static inline Point normalizeAnchor( Point anchor, Size ksize )
 
 void preprocess2DKernel( const Mat& kernel, std::vector<Point>& coords, std::vector<uchar>& coeffs );
 void crossCorr( const Mat& src, const Mat& templ, Mat& dst,
-               Size corrsize, int ctype,
                Point anchor=Point(0,0), double delta=0,
                int borderType=BORDER_REFLECT_101 );
-
 
 }
 

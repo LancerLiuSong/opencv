@@ -91,7 +91,15 @@
 #define __OPENCV_DNN_CAFFE_IO_HPP__
 #ifdef HAVE_PROTOBUF
 
+#if defined(__GNUC__) && __GNUC__ >= 5
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsuggest-override"
+#endif
 #include "opencv-caffe.pb.h"
+#if defined(__GNUC__) && __GNUC__ >= 5
+#pragma GCC diagnostic pop
+#endif
+
 namespace caffe { using namespace opencv_caffe; } // avoid massive renames from caffe proto package
 
 namespace cv {
@@ -111,9 +119,11 @@ void ReadNetParamsFromTextBufferOrDie(const char* data, size_t len,
 
 // Utility functions used internally by Caffe and TensorFlow loaders
 bool ReadProtoFromTextFile(const char* filename, ::google::protobuf::Message* proto);
-bool ReadProtoFromBinaryFile(const char* filename, ::google::protobuf::Message* proto);
+bool ReadProtoFromTextFile(const char* filename, ::google::protobuf::MessageLite* proto);
+bool ReadProtoFromBinaryFile(const char* filename, ::google::protobuf::MessageLite* proto);
 bool ReadProtoFromTextBuffer(const char* data, size_t len, ::google::protobuf::Message* proto);
-bool ReadProtoFromBinaryBuffer(const char* data, size_t len, ::google::protobuf::Message* proto);
+bool ReadProtoFromTextBuffer(const char* data, size_t len, ::google::protobuf::MessageLite* proto);
+bool ReadProtoFromBinaryBuffer(const char* data, size_t len, ::google::protobuf::MessageLite* proto);
 
 }
 }
